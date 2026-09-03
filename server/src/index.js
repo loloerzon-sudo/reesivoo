@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import authRoutes from './routes/authRoutes.js';
 import receiptRoutes from './routes/receiptRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 dotenv.config();
 
@@ -65,6 +66,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/receipts', receiptRoutes);
 app.use('/api/coupons', couponRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Serve built frontend assets when in production / when client/dist exists
 if (fs.existsSync(clientDistPath)) {

@@ -80,3 +80,43 @@ export const couponApi = {
     });
   },
 };
+
+export const adminApi = {
+  async getCoupons() {
+    return fetchApi('/admin/coupons');
+  },
+
+  async generateBatch(data) {
+    return fetchApi('/admin/coupons/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  async createCoupon(data) {
+    return fetchApi('/admin/coupons/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteCoupon(id) {
+    return fetchApi(`/admin/coupons/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getUsers() {
+    return fetchApi('/admin/users');
+  },
+
+  async updateUserCredits(id, credits) {
+    return fetchApi(`/admin/users/${id}/credits`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credits }),
+    });
+  },
+};

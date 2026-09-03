@@ -157,6 +157,15 @@ export const userQueries = {
     db.prepare('UPDATE users SET scan_credits = scan_credits + ? WHERE id = ?').run(creditsToAdd, id);
     const updated = db.prepare('SELECT scan_credits FROM users WHERE id = ?').get(id);
     return updated.scan_credits;
+  },
+
+  getAllUsers() {
+    return db.prepare('SELECT id, email, name, avatar_url, scan_credits, created_at FROM users ORDER BY id DESC').all();
+  },
+
+  setUserCredits(id, credits) {
+    db.prepare('UPDATE users SET scan_credits = ? WHERE id = ?').run(credits, id);
+    return db.prepare('SELECT id, email, scan_credits FROM users WHERE id = ?').get(id);
   }
 };
 
@@ -164,6 +173,21 @@ export const couponQueries = {
   getCouponByCode(code) {
     const normalized = (code || '').trim().toUpperCase();
     return db.prepare('SELECT * FROM coupons WHERE code = ? AND is_active = 1').get(normalized);
+  },
+
+  getAllCouponsWithDetails() {
+    const coupons = db.prepare(`
+      SELECT c.*, 
+             r.user_id as redeemed_by_user_id, 
+             r.redeemed_at,
+             u.email as redeemed_by_email,
+             u.name as redeemed_by_name
+      FROM coupons c
+      LEFT JOIN coupon_redemptions r ON c.id = r.coupon_id
+      LEFT JOIN users u ON r.user_id = u.id
+      ORDER BY c.id DESC
+    `).all();
+    return coupons;
   },
 
   hasUserRedeemed(userId, couponId) {
@@ -208,6 +232,32 @@ export const couponQueries = {
     const normalized = (code || '').trim().toUpperCase();
     db.prepare('INSERT INTO coupons (code, credits, max_uses) VALUES (?, ?, ?)').run(normalized, credits, max_uses);
     return db.prepare('SELECT * FROM coupons WHERE code = ?').get(normalized);
+  },
+
+  createBatchCoupons({ prefix = 'GCASH', credits = 100, count = 5 }) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // human-readable without O/0/I/1
+    const generated = [];
+
+    const insertBatch = db.transaction(() => {
+      const stmt = db.prepare('INSERT INTO coupons (code, credits, max_uses) VALUES (?, ?, 1)');
+      for (let i = 0; i < count; i++) {
+        let randomSuffix = '';
+        for (let j = 0; j < 5; j++) {
+          randomSuffix += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        const code = `${prefix}${credits}-${randomSuffix}`;
+        stmt.run(code, credits);
+        generated.push(code);
+      }
+    });
+
+    insertBatch();
+    return generated;
+  },
+
+  deleteCoupon(id) {
+    db.prepare('DELETE FROM coupons WHERE id = ?').run(id);
+    return { success: true };
   }
 };
 

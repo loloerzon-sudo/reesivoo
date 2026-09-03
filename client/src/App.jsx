@@ -7,6 +7,7 @@ import VerificationForm from './components/VerificationForm';
 import SuccessModal from './components/SuccessModal';
 import Footer from './components/Footer';
 import CreditsModal from './components/CreditsModal';
+import AdminVoucherPortal from './components/AdminVoucherPortal';
 import { authApi, receiptApi } from './services/api';
 import { toast } from 'sonner';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
@@ -15,6 +16,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [creditsModalOpen, setCreditsModalOpen] = useState(false);
+  const [adminPortalOpen, setAdminPortalOpen] = useState(false);
 
   // Workflow states: 'IDLE' | 'ANALYZING' | 'VERIFYING' | 'SUBMITTING' | 'SUCCESS'
   const [workflowState, setWorkflowState] = useState('IDLE');
@@ -188,6 +190,7 @@ export default function App() {
         user={user}
         onLogout={handleLogout}
         onOpenCreditsModal={() => setCreditsModalOpen(true)}
+        onOpenAdminModal={() => setAdminPortalOpen(true)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col">
@@ -262,6 +265,14 @@ export default function App() {
         user={user}
         onCreditsUpdated={(newCredits) => setUser((prev) => ({ ...prev, scanCredits: newCredits }))}
       />
+
+      {/* Admin Voucher Management Portal (Only erzon22@gmail.com) */}
+      {user?.email === 'erzon22@gmail.com' && (
+        <AdminVoucherPortal
+          isOpen={adminPortalOpen}
+          onClose={() => setAdminPortalOpen(false)}
+        />
+      )}
     </div>
   );
 }

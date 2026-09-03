@@ -1,7 +1,7 @@
 import React from 'react';
-import { ExternalLink, LogOut, FileSpreadsheet, Zap } from 'lucide-react';
+import { ExternalLink, LogOut, FileSpreadsheet, Zap, ShieldCheck } from 'lucide-react';
 
-export default function Navbar({ user, onLogout, onOpenCreditsModal }) {
+export default function Navbar({ user, onLogout, onOpenCreditsModal, onOpenAdminModal }) {
   return (
     <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -33,6 +33,19 @@ export default function Navbar({ user, onLogout, onOpenCreditsModal }) {
               <span>{user.scanCredits ?? 0} Scans</span>
               <span className="hidden sm:inline-block text-[10px] text-indigo-500 font-normal ml-0.5">• Need Credits?</span>
             </button>
+
+            {/* Admin Portal Button (Exclusively for erzon22@gmail.com) */}
+            {user.email === 'erzon22@gmail.com' && (
+              <button
+                onClick={onOpenAdminModal}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-colors cursor-pointer"
+                title="Manage vouchers & user credits"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden sm:inline">👑 Admin</span>
+                <span className="sm:hidden">Admin</span>
+              </button>
+            )}
 
             {/* Quick Access to User's Personal Google Sheet */}
             {user.sheetUrl && (
