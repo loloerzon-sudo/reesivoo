@@ -127,7 +127,10 @@ export default function App() {
       if (err.message?.includes('out_of_credits')) {
         setCreditsModalOpen(true);
       }
-      toast.error(err.message || 'Failed to extract receipt data.');
+      toast.error(err.message || 'Failed to extract receipt data.', {
+        duration: 6000,
+      });
+      setPreviewUrl(null);
       setWorkflowState('IDLE');
     }
   };

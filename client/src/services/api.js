@@ -14,7 +14,7 @@ export async function fetchApi(endpoint, options = {}) {
   const data = isJson ? await res.json() : await res.text();
 
   if (!res.ok) {
-    const errorMsg = data?.error || (typeof data === 'string' ? data : `HTTP ${res.status}`);
+    const errorMsg = data?.message || data?.error || (typeof data === 'string' ? data : `HTTP ${res.status}`);
     throw new Error(errorMsg);
   }
 

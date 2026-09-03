@@ -21,6 +21,15 @@ const EXPENSE_CATEGORIES = [
 export const receiptResponseSchema = {
   type: Type.OBJECT,
   properties: {
+    is_receipt: {
+      type: Type.BOOLEAN,
+      description: 'Set to TRUE if the uploaded image or document is an actual receipt, invoice, official receipt (OR), sales invoice (SI), utility bill, delivery receipt, ticket, or proof of payment. Set to FALSE if the image is a person, selfie, meme, animal/pet, vehicle, landscape, artwork, random object, or unrelated document.',
+    },
+    invalid_reason: {
+      type: Type.STRING,
+      description: 'If is_receipt is false, provide a short 3-6 word description of what the image actually is (e.g. "Selfie photo", "Picture of a pet", "Random object"). Return null if is_receipt is true.',
+      nullable: true,
+    },
     date: {
       type: Type.STRING,
       description: 'Transaction date in YYYY-MM-DD format. If year is omitted or ambiguous, assume current year. Return null if not found.',
@@ -62,7 +71,7 @@ export const receiptResponseSchema = {
       nullable: true,
     },
   },
-  required: ['category'],
+  required: ['is_receipt', 'category'],
 };
 
 export async function extractReceiptData(filePath, mimeType) {
@@ -77,8 +86,11 @@ export async function extractReceiptData(filePath, mimeType) {
   const fileBuffer = fs.readFileSync(filePath);
   const base64Data = fileBuffer.toString('base64');
 
-  const prompt = `You are a high-precision financial data extractor for business receipts and invoices.
-Analyze this receipt image thoroughly and extract all the requested fields into the JSON schema provided.
+  const prompt = `You are a high-precision financial data extractor for business receipts, invoices, and bills.
+First, determine if the image or document is a valid receipt, invoice, official receipt (OR), sales invoice (SI), utility bill, delivery receipt, ticket, or payment document.
+- Set is_receipt to true if it is a receipt/financial proof of payment, or false if it is a selfie, person, animal, meme, random object, car, scenery, or unrelated non-receipt document.
+- If is_receipt is false, specify invalid_reason.
+- If is_receipt is true, extract all available fields into the JSON schema.
 - If a text field (date, payee, tin, address, invoiceNo, remarks) cannot be found or is illegible, return null.
 - For category, choose the most appropriate category according to standard accounting principles. If not identifiable, select "Others".
 - For amount, find the final total gross amount paid.`;
@@ -106,6 +118,15 @@ Analyze this receipt image thoroughly and extract all the requested fields into 
   const rawText = response.text?.trim() || '{}';
   try {
     const parsed = JSON.parse(rawText);
+
+    // Validation: Verify if uploaded image is an actual receipt
+    if (parsed.is_receipt === false) {
+      const error = new Error("Oops! Hindi 'to resibo ha! 📸 Please upload or snap a clear photo of an official receipt, invoice, or bill. Your scan credits remain untouched! ✨");
+      error.isNotReceipt = true;
+      error.invalidReason = parsed.invalid_reason || 'Not a receipt';
+      throw error;
+    }
+
     return {
       date: parsed.date || null,
       payee: parsed.payee || null,
@@ -117,6 +138,7 @@ Analyze this receipt image thoroughly and extract all the requested fields into 
       amount: typeof parsed.amount === 'number' ? parsed.amount : (parsed.amount ? parseFloat(parsed.amount) : null),
     };
   } catch (err) {
+    if (err.isNotReceipt) throw err;
     console.error('Failed to parse Gemini response as JSON:', rawText, err);
     throw new Error('Invalid JSON response returned by AI model');
   }

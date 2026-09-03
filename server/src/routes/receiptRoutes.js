@@ -94,6 +94,14 @@ router.post('/analyze', requireAuth, upload.single('receipt'), async (req, res) 
       uploadQueries.deleteTempUpload(fileId);
     } catch (_) {}
 
+    if (err.isNotReceipt) {
+      return res.status(422).json({
+        error: 'not_a_receipt',
+        message: err.message,
+        invalidReason: err.invalidReason,
+      });
+    }
+
     res.status(500).json({
       error: err.message || 'Failed to analyze receipt. Please check your Gemini API key.',
     });
