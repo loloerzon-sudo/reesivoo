@@ -8,11 +8,22 @@ import SuccessModal from './components/SuccessModal';
 import Footer from './components/Footer';
 import CreditsModal from './components/CreditsModal';
 import AdminVoucherPortal from './components/AdminVoucherPortal';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsOfService from './components/TermsOfService';
 import { authApi, receiptApi } from './services/api';
 import { toast } from 'sonner';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 
 export default function App() {
+  // Simple static page routing for Google OAuth compliance
+  const pathname = window.location.pathname;
+  if (pathname === '/privacy') {
+    return <PrivacyPolicy />;
+  }
+  if (pathname === '/terms') {
+    return <TermsOfService />;
+  }
+
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [creditsModalOpen, setCreditsModalOpen] = useState(false);

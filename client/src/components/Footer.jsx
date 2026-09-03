@@ -11,12 +11,16 @@ export default function Footer() {
           <span>© {new Date().getFullYear()}</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 text-slate-400 text-[11px]">
+          <a href="/privacy" className="hover:text-indigo-600 transition-colors">Privacy</a>
+          <span>•</span>
+          <a href="/terms" className="hover:text-indigo-600 transition-colors">Terms</a>
+          <span>•</span>
           <a
             href="https://nerzon.online"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center gap-1 text-xs font-medium"
+            className="hover:text-indigo-600 transition-colors inline-flex items-center gap-1 font-medium"
             title="Developer Website"
           >
             <span>Dev</span>
