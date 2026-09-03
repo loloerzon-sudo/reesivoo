@@ -119,9 +119,9 @@ export default function UploadZone({ onFileSelect, isAnalyzing }) {
               <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center justify-center gap-1.5">
                 <span>{funnyQuote}</span>
               </h3>
-              <p className="text-[11px] sm:text-xs text-indigo-600 font-medium flex items-center justify-center gap-1.5 pt-0.5">
+              <p className="text-[11px] sm:text-xs text-indigo-600 font-semibold flex items-center justify-center gap-1.5 pt-0.5">
                 <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
-                <span>Gemini 3.5 Flash AI is reading receipt...</span>
+                <span>The Matalinaw Scan 3.5 is reading receipt...</span>
               </p>
             </div>
           </div>

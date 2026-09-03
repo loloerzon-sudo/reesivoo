@@ -55,7 +55,7 @@ export default function LoginView({ onLoginSuccess }) {
             <div className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center flex-shrink-0">
               <Sparkles className="w-3.5 h-3.5" />
             </div>
-            <span><strong>Gemini 3.5 Flash:</strong> Instant TIN, Payee & Amount OCR</span>
+            <span><strong>The Matalinaw Scan 3.5:</strong> Instant TIN, Payee & Amount OCR</span>
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-700">
             <div className="w-6 h-6 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">

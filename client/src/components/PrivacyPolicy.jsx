@@ -49,7 +49,7 @@ export default function PrivacyPolicy() {
           <section>
             <h2 className="text-base font-bold text-slate-900 mb-2">3. Data Processing & AI</h2>
             <p>
-              When you upload or photograph a receipt, the image is temporarily processed by Google Gemini AI to extract text, merchant details, dates, and amounts. Temporary upload files on our server are purged immediately after analysis or submission.
+              When you upload or photograph a receipt, the image is temporarily processed by our &ldquo;The Matalinaw Scan 3.5&rdquo; AI vision engine to extract text, merchant details, dates, and amounts. Temporary upload files on our server are purged immediately after analysis or submission.
             </p>
           </section>
 
