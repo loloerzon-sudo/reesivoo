@@ -1,0 +1,23 @@
+# Node dependencies
+node_modules/
+.npm
+
+# Build outputs
+dist/
+build/
+
+# Local databases & uploads
+server/data/*.db*
+server/uploads/temp/*
+!server/uploads/temp/.gitkeep
+
+# Environment variables
+.env
+server/.env
+client/.env
+*.env.local
+
+# Logs & temp
+*.log
+.DS_Store
+Thumbs.db
