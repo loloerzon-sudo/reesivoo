@@ -1,7 +1,7 @@
 import React from 'react';
-import { ReceiptText, ExternalLink, LogOut, FileSpreadsheet } from 'lucide-react';
+import { ExternalLink, LogOut, FileSpreadsheet, Zap } from 'lucide-react';
 
-export default function Navbar({ user, onLogout }) {
+export default function Navbar({ user, onLogout, onOpenCreditsModal }) {
   return (
     <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -22,7 +22,18 @@ export default function Navbar({ user, onLogout }) {
 
         {/* User Actions */}
         {user ? (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Scan Credits Indicator */}
+            <button
+              onClick={onOpenCreditsModal}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors cursor-pointer"
+              title="View scan credits or redeem voucher"
+            >
+              <Zap className="w-3.5 h-3.5 text-indigo-600 fill-indigo-600" />
+              <span>{user.scanCredits ?? 0} Scans</span>
+              <span className="hidden sm:inline-block text-[10px] text-indigo-500 font-normal ml-0.5">• Need Credits?</span>
+            </button>
+
             {/* Quick Access to User's Personal Google Sheet */}
             {user.sheetUrl && (
               <a

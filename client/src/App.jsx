@@ -6,6 +6,7 @@ import ReceiptViewer from './components/ReceiptViewer';
 import VerificationForm from './components/VerificationForm';
 import SuccessModal from './components/SuccessModal';
 import Footer from './components/Footer';
+import CreditsModal from './components/CreditsModal';
 import { authApi, receiptApi } from './services/api';
 import { toast } from 'sonner';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
@@ -13,6 +14,7 @@ import { Loader2, Eye, EyeOff } from 'lucide-react';
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [creditsModalOpen, setCreditsModalOpen] = useState(false);
 
   // Workflow states: 'IDLE' | 'ANALYZING' | 'VERIFYING' | 'SUBMITTING' | 'SUCCESS'
   const [workflowState, setWorkflowState] = useState('IDLE');
@@ -81,12 +83,24 @@ export default function App() {
   };
 
   const handleFileSelect = async (file) => {
+    // Check if user has scan credits remaining
+    if ((user?.scanCredits ?? 0) <= 0) {
+      setCreditsModalOpen(true);
+      toast.error("You're out of scan credits! Please redeem a voucher code.");
+      return;
+    }
+
     try {
       setWorkflowState('ANALYZING');
       const localPreview = URL.createObjectURL(file);
       setPreviewUrl(localPreview);
 
       const res = await receiptApi.analyzeReceipt(file);
+
+      // Decrement credits in real-time
+      if (typeof res.remainingCredits === 'number') {
+        setUser((prev) => ({ ...prev, scanCredits: res.remainingCredits }));
+      }
 
       setTempImageId(res.tempImageId);
       if (res.previewUrl) {
@@ -97,6 +111,9 @@ export default function App() {
       toast.success('Receipt analyzed! Please verify extracted fields.');
     } catch (err) {
       console.error('Analysis error:', err);
+      if (err.message?.includes('out_of_credits')) {
+        setCreditsModalOpen(true);
+      }
       toast.error(err.message || 'Failed to extract receipt data.');
       setWorkflowState('IDLE');
     }
@@ -167,7 +184,11 @@ export default function App() {
   // 3. Authenticated App Flow
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <Navbar user={user} onLogout={handleLogout} />
+      <Navbar
+        user={user}
+        onLogout={handleLogout}
+        onOpenCreditsModal={() => setCreditsModalOpen(true)}
+      />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col">
         {/* State A: Idle or Analyzing */}
@@ -233,6 +254,14 @@ export default function App() {
         )}
       </main>
       <Footer />
+
+      {/* Credits & Voucher Modal */}
+      <CreditsModal
+        isOpen={creditsModalOpen}
+        onClose={() => setCreditsModalOpen(false)}
+        user={user}
+        onCreditsUpdated={(newCredits) => setUser((prev) => ({ ...prev, scanCredits: newCredits }))}
+      />
     </div>
   );
 }

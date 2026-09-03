@@ -70,3 +70,13 @@ export const receiptApi = {
     });
   },
 };
+
+export const couponApi = {
+  async redeem(code) {
+    return fetchApi('/coupons/redeem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+  },
+};

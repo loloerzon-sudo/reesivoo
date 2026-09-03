@@ -18,15 +18,7 @@ const db = new Database(dbPath);
 // Enable WAL mode
 db.pragma('journal_mode = WAL');
 
-// Recreate clean Google OAuth users table
-try {
-  const tableInfo = db.prepare('PRAGMA table_info(users)').all();
-  const columnNames = tableInfo.map((col) => col.name);
-  if (!columnNames.includes('google_id')) {
-    db.exec('DROP TABLE IF EXISTS users');
-  }
-} catch (_) {}
-
+// Ensure tables exist
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,8 +31,29 @@ db.exec(`
     token_expiry INTEGER,
     target_sheet_id TEXT,
     target_folder_id TEXT,
+    scan_credits INTEGER DEFAULT 10,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS coupons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    credits INTEGER NOT NULL,
+    max_uses INTEGER DEFAULT 1,
+    times_used INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS coupon_redemptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    coupon_id INTEGER NOT NULL,
+    redeemed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE,
+    UNIQUE(user_id, coupon_id)
   );
 
   CREATE TABLE IF NOT EXISTS temp_uploads (
@@ -53,6 +66,26 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `);
+
+// Safe column migration: add scan_credits if not present
+try {
+  const tableInfo = db.prepare('PRAGMA table_info(users)').all();
+  const columnNames = tableInfo.map((col) => col.name);
+  if (!columnNames.includes('scan_credits')) {
+    db.exec('ALTER TABLE users ADD COLUMN scan_credits INTEGER DEFAULT 10');
+  }
+} catch (_) {}
+
+// Seed starter promotional coupons if empty
+try {
+  const count = db.prepare('SELECT COUNT(*) as count FROM coupons').get();
+  if (count.count === 0) {
+    const insert = db.prepare('INSERT OR IGNORE INTO coupons (code, credits, max_uses) VALUES (?, ?, ?)');
+    insert.run('WELCOME10', 10, 10000); // 10 free scans promo
+    insert.run('VIP-ERZON', 1000, 10);   // VIP creator code
+    insert.run('GCASH100-SAMPLE', 100, 1); // 1-time 100-scan voucher
+  }
+} catch (_) {}
 
 export const userQueries = {
   getUserById(id) {
@@ -75,8 +108,8 @@ export const userQueries = {
       return db.prepare('SELECT * FROM users WHERE google_id = ?').get(google_id);
     } else {
       const info = db.prepare(`
-        INSERT INTO users (google_id, email, name, avatar_url, access_token, refresh_token, token_expiry)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (google_id, email, name, avatar_url, access_token, refresh_token, token_expiry, scan_credits)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 10)
       `).run(google_id, email, name, avatar_url, access_token, refresh_token, token_expiry);
       return db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
     }
@@ -108,6 +141,73 @@ export const userQueries = {
       WHERE id = ?
     `).run(target_sheet_id, target_folder_id, id);
     return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  },
+
+  deductUserCredit(id) {
+    const user = db.prepare('SELECT scan_credits FROM users WHERE id = ?').get(id);
+    if (!user || user.scan_credits <= 0) {
+      throw new Error('No scan credits remaining');
+    }
+    db.prepare('UPDATE users SET scan_credits = scan_credits - 1 WHERE id = ?').run(id);
+    const updated = db.prepare('SELECT scan_credits FROM users WHERE id = ?').get(id);
+    return updated.scan_credits;
+  },
+
+  addUserCredits(id, creditsToAdd) {
+    db.prepare('UPDATE users SET scan_credits = scan_credits + ? WHERE id = ?').run(creditsToAdd, id);
+    const updated = db.prepare('SELECT scan_credits FROM users WHERE id = ?').get(id);
+    return updated.scan_credits;
+  }
+};
+
+export const couponQueries = {
+  getCouponByCode(code) {
+    const normalized = (code || '').trim().toUpperCase();
+    return db.prepare('SELECT * FROM coupons WHERE code = ? AND is_active = 1').get(normalized);
+  },
+
+  hasUserRedeemed(userId, couponId) {
+    const row = db.prepare('SELECT 1 FROM coupon_redemptions WHERE user_id = ? AND coupon_id = ?').get(userId, couponId);
+    return !!row;
+  },
+
+  redeemCoupon(userId, code) {
+    const normalized = (code || '').trim().toUpperCase();
+    const coupon = db.prepare('SELECT * FROM coupons WHERE code = ? AND is_active = 1').get(normalized);
+
+    if (!coupon) {
+      throw new Error('Invalid or expired coupon code');
+    }
+
+    if (coupon.times_used >= coupon.max_uses) {
+      throw new Error('This coupon code has already reached its maximum usage limit');
+    }
+
+    const alreadyRedeemed = db.prepare('SELECT 1 FROM coupon_redemptions WHERE user_id = ? AND coupon_id = ?').get(userId, coupon.id);
+    if (alreadyRedeemed) {
+      throw new Error('You have already redeemed this promo code');
+    }
+
+    // Atomic transaction: record redemption, increment times_used, add credits to user
+    const redeemTransaction = db.transaction(() => {
+      db.prepare('INSERT INTO coupon_redemptions (user_id, coupon_id) VALUES (?, ?)').run(userId, coupon.id);
+      db.prepare('UPDATE coupons SET times_used = times_used + 1 WHERE id = ?').run(coupon.id);
+      db.prepare('UPDATE users SET scan_credits = scan_credits + ? WHERE id = ?').run(coupon.credits, userId);
+      const user = db.prepare('SELECT scan_credits FROM users WHERE id = ?').get(userId);
+      return {
+        addedCredits: coupon.credits,
+        newTotalCredits: user.scan_credits,
+        code: coupon.code
+      };
+    });
+
+    return redeemTransaction();
+  },
+
+  createCoupon({ code, credits, max_uses = 1 }) {
+    const normalized = (code || '').trim().toUpperCase();
+    db.prepare('INSERT INTO coupons (code, credits, max_uses) VALUES (?, ?, ?)').run(normalized, credits, max_uses);
+    return db.prepare('SELECT * FROM coupons WHERE code = ?').get(normalized);
   }
 };
 

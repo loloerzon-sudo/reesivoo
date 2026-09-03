@@ -7,6 +7,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import authRoutes from './routes/authRoutes.js';
 import receiptRoutes from './routes/receiptRoutes.js';
+import couponRoutes from './routes/couponRoutes.js';
 
 dotenv.config();
 
@@ -63,6 +64,7 @@ app.get('/api/health', (req, res) => {
 // Mount modular API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/receipts', receiptRoutes);
+app.use('/api/coupons', couponRoutes);
 
 // Serve built frontend assets when in production / when client/dist exists
 if (fs.existsSync(clientDistPath)) {

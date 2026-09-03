@@ -50,6 +50,17 @@ router.post('/analyze', requireAuth, upload.single('receipt'), async (req, res) 
     return res.status(400).json({ error: 'No receipt file uploaded' });
   }
 
+  // Check if user has sufficient scan credits
+  if ((req.user.scan_credits ?? 0) <= 0) {
+    try {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(403).json({
+      error: 'out_of_credits',
+      message: 'You have 0 scan credits remaining. Please redeem a voucher code or contact the Dev to continue.',
+    });
+  }
+
   const fileId = uuidv4();
   const filePath = req.file.path;
   const mimeType = req.file.mimetype;
@@ -66,11 +77,15 @@ router.post('/analyze', requireAuth, upload.single('receipt'), async (req, res) 
 
     const extractedData = await extractReceiptData(filePath, mimeType);
 
+    // Deduct 1 credit upon successful AI extraction
+    const remainingCredits = userQueries.deductUserCredit(req.user.id);
+
     res.json({
       success: true,
       tempImageId: fileId,
       previewUrl: `/api/receipts/temp-image/${fileId}`,
       data: extractedData,
+      remainingCredits,
     });
   } catch (err) {
     console.error('Receipt analysis error:', err);

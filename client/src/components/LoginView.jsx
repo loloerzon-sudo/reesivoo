@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ReceiptText, Sparkles, FolderSync, TableProperties, ShieldCheck, ArrowRight, Loader2, AlertCircle, ExternalLink, Heart } from 'lucide-react';
+import { ReceiptText, Sparkles, FolderSync, TableProperties, ShieldCheck, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { authApi } from '../services/api';
 import { toast } from 'sonner';
 
@@ -125,22 +125,6 @@ export default function LoginView({ onLoginSuccess }) {
         <p className="mt-4 text-[11px] text-slate-400">
           Requires Google Drive & Sheets permissions to store your receipts.
         </p>
-
-        {/* Developer Credit */}
-        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center gap-1.5 text-xs text-slate-500">
-          <span>Developed with</span>
-          <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 inline" />
-          <span>by</span>
-          <a
-            href="https://nerzon.online"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-bold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-0.5 ml-0.5"
-          >
-            <span>nerzon.online</span>
-            <ExternalLink className="w-3 h-3 opacity-70" />
-          </a>
-        </div>
       </div>
     </div>
   );
