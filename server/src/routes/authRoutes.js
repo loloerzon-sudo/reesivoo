@@ -33,7 +33,7 @@ router.get('/callback', async (req, res) => {
   try {
     const { tokens, profile } = await exchangeCodeForTokens(code);
 
-    let user = userQueries.upsertUser({
+    let user = await userQueries.upsertUser({
       google_id: profile.id,
       email: profile.email,
       name: profile.name,
@@ -64,7 +64,7 @@ router.get('/callback', async (req, res) => {
     }
 
     if (folderId !== user.target_folder_id || sheetId !== user.target_sheet_id) {
-      user = userQueries.updateUserTargets(user.id, {
+      user = await userQueries.updateUserTargets(user.id, {
         target_folder_id: folderId,
         target_sheet_id: sheetId,
       });
@@ -88,7 +88,7 @@ router.post('/callback', async (req, res) => {
   try {
     const { tokens, profile } = await exchangeCodeForTokens(code);
 
-    let user = userQueries.upsertUser({
+    let user = await userQueries.upsertUser({
       google_id: profile.id,
       email: profile.email,
       name: profile.name,
@@ -121,7 +121,7 @@ router.post('/callback', async (req, res) => {
     }
 
     if (folderId !== user.target_folder_id || sheetId !== user.target_sheet_id) {
-      user = userQueries.updateUserTargets(user.id, {
+      user = await userQueries.updateUserTargets(user.id, {
         target_folder_id: folderId,
         target_sheet_id: sheetId,
       });
@@ -151,13 +151,13 @@ router.post('/callback', async (req, res) => {
 });
 
 // 3. Current authenticated user status
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   const userId = req.session?.userId;
   if (!userId) {
     return res.json({ authenticated: false, user: null });
   }
 
-  const user = userQueries.getUserById(userId);
+  const user = await userQueries.getUserById(userId);
   if (!user) {
     req.session = null;
     return res.json({ authenticated: false, user: null });

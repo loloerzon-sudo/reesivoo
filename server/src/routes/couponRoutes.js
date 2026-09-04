@@ -5,14 +5,14 @@ import { couponQueries, userQueries } from '../db/index.js';
 const router = express.Router();
 
 // 1. Redeem a coupon/voucher code
-router.post('/redeem', requireAuth, (req, res) => {
+router.post('/redeem', requireAuth, async (req, res) => {
   const { code } = req.body;
   if (!code || typeof code !== 'string' || !code.trim()) {
     return res.status(400).json({ error: 'Please enter a coupon code' });
   }
 
   try {
-    const result = couponQueries.redeemCoupon(req.user.id, code);
+    const result = await couponQueries.redeemCoupon(req.user.id, code);
     res.json({
       success: true,
       addedCredits: result.addedCredits,
@@ -27,7 +27,7 @@ router.post('/redeem', requireAuth, (req, res) => {
 });
 
 // 2. Generate a coupon (Developer / Admin utility)
-router.post('/create', requireAuth, (req, res) => {
+router.post('/create', requireAuth, async (req, res) => {
   // Only erzon22@gmail.com can create coupons
   if (req.user.email !== 'erzon22@gmail.com') {
     return res.status(403).json({ error: 'Unauthorized' });
@@ -39,7 +39,7 @@ router.post('/create', requireAuth, (req, res) => {
   }
 
   try {
-    const coupon = couponQueries.createCoupon({
+    const coupon = await couponQueries.createCoupon({
       code,
       credits: parseInt(credits, 10),
       max_uses: max_uses ? parseInt(max_uses, 10) : 1,

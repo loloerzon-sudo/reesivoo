@@ -67,7 +67,7 @@ router.post('/analyze', requireAuth, upload.single('receipt'), async (req, res) 
   const originalName = req.file.originalname;
 
   try {
-    uploadQueries.createTempUpload({
+    await uploadQueries.createTempUpload({
       id: fileId,
       user_id: req.user.id,
       file_path: filePath,
@@ -78,7 +78,7 @@ router.post('/analyze', requireAuth, upload.single('receipt'), async (req, res) 
     const extractedData = await extractReceiptData(filePath, mimeType);
 
     // Deduct 1 credit upon successful AI extraction
-    const remainingCredits = userQueries.deductUserCredit(req.user.id);
+    const remainingCredits = await userQueries.deductUserCredit(req.user.id);
 
     res.json({
       success: true,
@@ -91,7 +91,7 @@ router.post('/analyze', requireAuth, upload.single('receipt'), async (req, res) 
     console.error('Receipt analysis error:', err);
     try {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      uploadQueries.deleteTempUpload(fileId);
+      await uploadQueries.deleteTempUpload(fileId);
     } catch (_) {}
 
     if (err.isNotReceipt) {
@@ -102,15 +102,31 @@ router.post('/analyze', requireAuth, upload.single('receipt'), async (req, res) 
       });
     }
 
+    const isQuotaOrServiceExhausted =
+      err.isQuotaExhausted ||
+      err.status === 429 ||
+      err.message?.includes('429') ||
+      err.message?.includes('RESOURCE_EXHAUSTED') ||
+      err.message?.includes('Quota exceeded') ||
+      err.message?.includes('rate-limit') ||
+      err.message?.includes('exhausted or unavailable');
+
+    if (isQuotaOrServiceExhausted) {
+      return res.status(429).json({
+        error: 'quota_exhausted',
+        message: 'Pasensya na! Our AI scanner is currently experiencing high demand or reached capacity. Please try again in a few minutes.',
+      });
+    }
+
     res.status(500).json({
-      error: err.message || 'Failed to analyze receipt. Please check your Gemini API key.',
+      error: 'Pasensya na! Our AI scanner is currently experiencing high demand or reached capacity. Please try again in a few minutes.',
     });
   }
 });
 
 // 2. Serve temp image for preview
-router.get('/temp-image/:id', requireAuth, (req, res) => {
-  const temp = uploadQueries.getTempUpload(req.params.id);
+router.get('/temp-image/:id', requireAuth, async (req, res) => {
+  const temp = await uploadQueries.getTempUpload(req.params.id);
   if (!temp || temp.user_id !== req.user.id) {
     return res.status(404).json({ error: 'Image not found' });
   }
@@ -130,13 +146,13 @@ router.post('/submit', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Missing tempImageId or verifiedData' });
   }
 
-  const temp = uploadQueries.getTempUpload(tempImageId);
+  const temp = await uploadQueries.getTempUpload(tempImageId);
   if (!temp || temp.user_id !== req.user.id) {
     return res.status(404).json({ error: 'Temporary upload not found or already submitted' });
   }
 
   if (!fs.existsSync(temp.file_path)) {
-    uploadQueries.deleteTempUpload(tempImageId);
+    await uploadQueries.deleteTempUpload(tempImageId);
     return res.status(404).json({ error: 'Temporary image file not found on server' });
   }
 
@@ -157,7 +173,7 @@ router.post('/submit', requireAuth, async (req, res) => {
     }
 
     if (folderId !== req.user.target_folder_id || sheetId !== req.user.target_sheet_id) {
-      userQueries.updateUserTargets(req.user.id, {
+      await userQueries.updateUserTargets(req.user.id, {
         target_folder_id: folderId,
         target_sheet_id: sheetId,
       });
@@ -180,7 +196,7 @@ router.post('/submit', requireAuth, async (req, res) => {
 
     try {
       if (fs.existsSync(temp.file_path)) fs.unlinkSync(temp.file_path);
-      uploadQueries.deleteTempUpload(tempImageId);
+      await uploadQueries.deleteTempUpload(tempImageId);
     } catch (_) {}
 
     res.json({
@@ -197,18 +213,18 @@ router.post('/submit', requireAuth, async (req, res) => {
 });
 
 // 4. Discard unsubmitted temp receipt
-router.post('/discard', requireAuth, (req, res) => {
+router.post('/discard', requireAuth, async (req, res) => {
   const { tempImageId } = req.body;
   if (!tempImageId) {
     return res.status(400).json({ error: 'Missing tempImageId' });
   }
 
-  const temp = uploadQueries.getTempUpload(tempImageId);
+  const temp = await uploadQueries.getTempUpload(tempImageId);
   if (temp && temp.user_id === req.user.id) {
     try {
       if (fs.existsSync(temp.file_path)) fs.unlinkSync(temp.file_path);
     } catch (_) {}
-    uploadQueries.deleteTempUpload(tempImageId);
+    await uploadQueries.deleteTempUpload(tempImageId);
   }
 
   res.json({ success: true });

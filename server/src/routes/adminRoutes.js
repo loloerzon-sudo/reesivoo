@@ -16,9 +16,9 @@ router.use(requireAuth);
 router.use(requireAdmin);
 
 // 1. Get all coupons with redemption details
-router.get('/coupons', (req, res) => {
+router.get('/coupons', async (req, res) => {
   try {
-    const coupons = couponQueries.getAllCouponsWithDetails();
+    const coupons = await couponQueries.getAllCouponsWithDetails();
     res.json({ success: true, coupons });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to fetch coupons' });
@@ -26,13 +26,13 @@ router.get('/coupons', (req, res) => {
 });
 
 // 2. Batch generate single-use GCash vouchers
-router.post('/coupons/batch', (req, res) => {
+router.post('/coupons/batch', async (req, res) => {
   const { prefix = 'GCASH', credits = 100, count = 5 } = req.body;
   const numCredits = parseInt(credits, 10);
   const numCount = Math.min(Math.max(parseInt(count, 10) || 1, 1), 50);
 
   try {
-    const generatedCodes = couponQueries.createBatchCoupons({
+    const generatedCodes = await couponQueries.createBatchCoupons({
       prefix: (prefix || 'GCASH').toUpperCase(),
       credits: numCredits,
       count: numCount,
@@ -48,14 +48,14 @@ router.post('/coupons/batch', (req, res) => {
 });
 
 // 3. Create custom promo coupon
-router.post('/coupons/create', (req, res) => {
+router.post('/coupons/create', async (req, res) => {
   const { code, credits, max_uses = 1 } = req.body;
   if (!code || !credits) {
     return res.status(400).json({ error: 'Code and credits are required' });
   }
 
   try {
-    const coupon = couponQueries.createCoupon({
+    const coupon = await couponQueries.createCoupon({
       code,
       credits: parseInt(credits, 10),
       max_uses: parseInt(max_uses, 10),
@@ -67,9 +67,9 @@ router.post('/coupons/create', (req, res) => {
 });
 
 // 4. Delete/deactivate coupon
-router.delete('/coupons/:id', (req, res) => {
+router.delete('/coupons/:id', async (req, res) => {
   try {
-    couponQueries.deleteCoupon(parseInt(req.params.id, 10));
+    await couponQueries.deleteCoupon(parseInt(req.params.id, 10));
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to delete coupon' });
@@ -77,9 +77,9 @@ router.delete('/coupons/:id', (req, res) => {
 });
 
 // 5. Get all users and credit balances
-router.get('/users', (req, res) => {
+router.get('/users', async (req, res) => {
   try {
-    const users = userQueries.getAllUsers();
+    const users = await userQueries.getAllUsers();
     res.json({ success: true, users });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to fetch users' });
@@ -87,14 +87,14 @@ router.get('/users', (req, res) => {
 });
 
 // 6. Manually adjust user credits
-router.post('/users/:id/credits', (req, res) => {
+router.post('/users/:id/credits', async (req, res) => {
   const { credits } = req.body;
   if (typeof credits !== 'number') {
     return res.status(400).json({ error: 'Credits must be a number' });
   }
 
   try {
-    const updated = userQueries.setUserCredits(parseInt(req.params.id, 10), credits);
+    const updated = await userQueries.setUserCredits(parseInt(req.params.id, 10), credits);
     res.json({ success: true, user: updated });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to update user credits' });

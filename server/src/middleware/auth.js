@@ -1,13 +1,13 @@
 import { userQueries } from '../db/index.js';
 import { getAuthenticatedClient } from '../config/google.js';
 
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
   const userId = req.session?.userId;
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized: No active session' });
   }
 
-  const user = userQueries.getUserById(userId);
+  const user = await userQueries.getUserById(userId);
   if (!user) {
     req.session = null;
     return res.status(401).json({ error: 'Unauthorized: User not found' });

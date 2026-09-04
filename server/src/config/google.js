@@ -48,13 +48,17 @@ export function getAuthenticatedClient(user) {
     expiry_date: user.token_expiry
   });
 
-  // Automatically persist refreshed tokens to SQLite if Google triggers token refresh
-  oauth2Client.on('tokens', (tokens) => {
-    userQueries.updateUserTokens(user.id, {
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token || user.refresh_token,
-      token_expiry: tokens.expiry_date
-    });
+  // Automatically persist refreshed tokens to database if Google triggers token refresh
+  oauth2Client.on('tokens', async (tokens) => {
+    try {
+      await userQueries.updateUserTokens(user.id, {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token || user.refresh_token,
+        token_expiry: tokens.expiry_date
+      });
+    } catch (err) {
+      console.warn('Failed to persist refreshed Google tokens:', err.message);
+    }
   });
 
   return oauth2Client;

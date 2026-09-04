@@ -14,7 +14,22 @@ export async function fetchApi(endpoint, options = {}) {
   const data = isJson ? await res.json() : await res.text();
 
   if (!res.ok) {
-    const errorMsg = data?.message || data?.error || (typeof data === 'string' ? data : `HTTP ${res.status}`);
+    let errorMsg = data?.message || data?.error || (typeof data === 'string' ? data : `HTTP ${res.status}`);
+
+    // If errorMsg is stringified JSON from an upstream API, extract a user-friendly message
+    if (typeof errorMsg === 'string' && (errorMsg.startsWith('{') || errorMsg.includes('"error"'))) {
+      try {
+        const parsed = JSON.parse(errorMsg);
+        if (parsed?.error?.message) {
+          if (parsed.error.code === 429 || parsed.error.status === 'RESOURCE_EXHAUSTED' || errorMsg.includes('Quota exceeded')) {
+            errorMsg = 'Pasensya na! Our AI scanner is currently experiencing high demand. Please try again in a few moments.';
+          } else {
+            errorMsg = parsed.error.message;
+          }
+        }
+      } catch (_) {}
+    }
+
     throw new Error(errorMsg);
   }
 

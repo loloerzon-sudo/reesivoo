@@ -74,19 +74,66 @@ export const receiptResponseSchema = {
   required: ['is_receipt', 'category'],
 };
 
-export async function extractReceiptData(filePath, mimeType) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured in server environment');
+export const GEMINI_CASCADE_MODELS = [
+  'gemini-3.6-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-lite-latest',
+];
+
+export const DEFAULT_OPENROUTER_MODELS = [
+  'google/gemma-4-31b-it:free',
+  'minimax/minimax-m3:free',
+  'z-ai/glm-5.2:free',
+  'meta-llama/llama-3.2-11b-vision-instruct:free',
+  'qwen/qwen-2.5-vl-72b-instruct:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'openrouter/free',
+];
+
+function extractJsonFromText(rawText) {
+  if (!rawText) return {};
+  let cleaned = rawText.trim();
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (err) {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const jsonSubstr = cleaned.substring(firstBrace, lastBrace + 1);
+      return JSON.parse(jsonSubstr);
+    }
+    throw err;
+  }
+}
+
+function normalizeReceiptResponse(parsed) {
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Invalid JSON structure returned by model');
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  // Validation: Verify if uploaded image is an actual receipt
+  if (parsed.is_receipt === false) {
+    const error = new Error("Oops! Hindi 'to resibo ha! 📸 Please upload or snap a clear photo of an official receipt, invoice, or bill. Your scan credits remain untouched! ✨");
+    error.isNotReceipt = true;
+    error.invalidReason = parsed.invalid_reason || 'Not a receipt';
+    throw error;
+  }
 
-  // Read file as base64
-  const fileBuffer = fs.readFileSync(filePath);
-  const base64Data = fileBuffer.toString('base64');
+  return {
+    date: parsed.date || null,
+    payee: parsed.payee || null,
+    tin: parsed.tin || null,
+    address: parsed.address || null,
+    invoiceNo: parsed.invoiceNo || null,
+    category: EXPENSE_CATEGORIES.includes(parsed.category) ? parsed.category : 'Others',
+    remarks: parsed.remarks || null,
+    amount: typeof parsed.amount === 'number' ? parsed.amount : (parsed.amount ? parseFloat(parsed.amount) : null),
+  };
+}
 
-  const prompt = `You are a high-precision financial data extractor for business receipts, invoices, and bills.
+const EXTRACTION_PROMPT = `You are a high-precision financial data extractor for business receipts, invoices, and bills.
 First, determine if the image or document is a valid receipt, invoice, official receipt (OR), sales invoice (SI), utility bill, delivery receipt, ticket, or payment document.
 - Set is_receipt to true if it is a receipt/financial proof of payment, or false if it is a selfie, person, animal, meme, random object, car, scenery, or unrelated non-receipt document.
 - If is_receipt is false, specify invalid_reason.
@@ -95,11 +142,12 @@ First, determine if the image or document is a valid receipt, invoice, official 
 - For category, choose the most appropriate category according to standard accounting principles. If not identifiable, select "Others".
 - For amount, find the final total gross amount paid.`;
 
+async function callGemini(ai, modelName, mimeType, base64Data) {
   const response = await ai.models.generateContent({
-    model: 'gemini-3.5-flash',
+    model: modelName,
     contents: [
       {
-        text: prompt,
+        text: EXTRACTION_PROMPT,
       },
       {
         inlineData: {
@@ -116,30 +164,134 @@ First, determine if the image or document is a valid receipt, invoice, official 
   });
 
   const rawText = response.text?.trim() || '{}';
-  try {
-    const parsed = JSON.parse(rawText);
+  return extractJsonFromText(rawText);
+}
 
-    // Validation: Verify if uploaded image is an actual receipt
-    if (parsed.is_receipt === false) {
-      const error = new Error("Oops! Hindi 'to resibo ha! 📸 Please upload or snap a clear photo of an official receipt, invoice, or bill. Your scan credits remain untouched! ✨");
-      error.isNotReceipt = true;
-      error.invalidReason = parsed.invalid_reason || 'Not a receipt';
-      throw error;
-    }
+async function callOpenRouter(apiKey, modelName, mimeType, base64Data) {
+  const formattedPrompt = `${EXTRACTION_PROMPT}
 
-    return {
-      date: parsed.date || null,
-      payee: parsed.payee || null,
-      tin: parsed.tin || null,
-      address: parsed.address || null,
-      invoiceNo: parsed.invoiceNo || null,
-      category: EXPENSE_CATEGORIES.includes(parsed.category) ? parsed.category : 'Others',
-      remarks: parsed.remarks || null,
-      amount: typeof parsed.amount === 'number' ? parsed.amount : (parsed.amount ? parseFloat(parsed.amount) : null),
-    };
-  } catch (err) {
-    if (err.isNotReceipt) throw err;
-    console.error('Failed to parse Gemini response as JSON:', rawText, err);
-    throw new Error('Invalid JSON response returned by AI model');
+You MUST return only a raw, valid JSON object strictly matching this format without any introductory or conversational text:
+{
+  "is_receipt": true,
+  "invalid_reason": null,
+  "date": "YYYY-MM-DD" or null,
+  "payee": "Merchant / Store Name" or null,
+  "tin": "000-000-000-000" or null,
+  "address": "Store Address" or null,
+  "invoiceNo": "Invoice / OR Number" or null,
+  "category": "Repair Maintenance" | "De Minimis" | "Utilities" | "Subscription" | "Transportation" | "Miscellaneous" | "Gasoline" | "Representation" | "Pantry" | "Medicine/Office Others" | "Others",
+  "remarks": "Summary of items" or null,
+  "amount": 123.45 or null
+}`;
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://reesivoo.onrender.com',
+      'X-Title': 'Reesivoo',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: modelName,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: formattedPrompt,
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${mimeType || 'image/jpeg'};base64,${base64Data}`,
+              },
+            },
+          ],
+        },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.1,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenRouter (${modelName}) HTTP ${response.status}: ${errText}`);
   }
+
+  const data = await response.json();
+  const rawContent = data.choices?.[0]?.message?.content;
+  if (!rawContent) {
+    throw new Error(`OpenRouter (${modelName}) returned empty response content`);
+  }
+
+  return extractJsonFromText(rawContent);
+}
+
+export async function extractReceiptData(filePath, mimeType) {
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+
+  if (!geminiApiKey && !openRouterApiKey) {
+    throw new Error('Neither GEMINI_API_KEY nor OPENROUTER_API_KEY is configured in server environment');
+  }
+
+  // Read file as base64
+  const fileBuffer = fs.readFileSync(filePath);
+  const base64Data = fileBuffer.toString('base64');
+
+  const errors = [];
+
+  // 1. Cascade through Gemini models first
+  if (geminiApiKey) {
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    for (const model of GEMINI_CASCADE_MODELS) {
+      try {
+        console.log(`[OCR Engine] Attempting extraction with Gemini model: ${model}`);
+        const rawJson = await callGemini(ai, model, mimeType, base64Data);
+        const normalized = normalizeReceiptResponse(rawJson);
+        console.log(`[OCR Engine] Successfully processed receipt with Gemini model: ${model}`);
+        return normalized;
+      } catch (err) {
+        // If image is confirmed NOT a receipt, stop immediately and reject without burning credits
+        if (err.isNotReceipt) {
+          throw err;
+        }
+        console.warn(`[OCR Engine] Gemini model ${model} failed: ${err.message}. Trying next fallback...`);
+        errors.push({ engine: 'gemini', model, error: err.message });
+      }
+    }
+  }
+
+  // 2. Cascade through OpenRouter free vision models if configured
+  if (openRouterApiKey) {
+    const openRouterModels = process.env.OPENROUTER_FALLBACK_MODELS
+      ? process.env.OPENROUTER_FALLBACK_MODELS.split(',').map((m) => m.trim()).filter(Boolean)
+      : DEFAULT_OPENROUTER_MODELS;
+
+    for (const model of openRouterModels) {
+      try {
+        console.log(`[OCR Engine] Attempting extraction with OpenRouter model: ${model}`);
+        const rawJson = await callOpenRouter(openRouterApiKey, model, mimeType, base64Data);
+        const normalized = normalizeReceiptResponse(rawJson);
+        console.log(`[OCR Engine] Successfully processed receipt with OpenRouter model: ${model}`);
+        return normalized;
+      } catch (err) {
+        if (err.isNotReceipt) {
+          throw err;
+        }
+        console.warn(`[OCR Engine] OpenRouter model ${model} failed: ${err.message}. Trying next fallback...`);
+        errors.push({ engine: 'openrouter', model, error: err.message });
+      }
+    }
+  }
+
+  // 3. If all engines and models failed, construct quota exhaustion error
+  console.error('[OCR Engine] All AI vision models and fallbacks failed:', errors);
+  const exhaustionErr = new Error('All AI vision models are currently exhausted or unavailable.');
+  exhaustionErr.isQuotaExhausted = true;
+  exhaustionErr.details = errors;
+  throw exhaustionErr;
 }

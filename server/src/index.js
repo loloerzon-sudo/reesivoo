@@ -9,6 +9,7 @@ import authRoutes from './routes/authRoutes.js';
 import receiptRoutes from './routes/receiptRoutes.js';
 import couponRoutes from './routes/couponRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import { initDb } from './db/index.js';
 
 dotenv.config();
 
@@ -84,6 +85,9 @@ app.use((err, req, res, next) => {
     error: err.message || 'Internal Server Error',
   });
 });
+
+// Initialize database connection & tables
+await initDb();
 
 app.listen(PORT, () => {
   console.log(`🚀 Reesivoo backend running on http://localhost:${PORT}`);
